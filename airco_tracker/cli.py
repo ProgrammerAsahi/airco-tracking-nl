@@ -54,6 +54,13 @@ def check(config: Config, *, dry_run: bool, show_all: bool) -> int:
         LOG.error("All retailer checks failed")
         return 2
 
+    if failures:
+        LOG.warning(
+            "%d retailer check(s) failed; continuing with successful retailers: %s",
+            len(failures),
+            "; ".join(failures),
+        )
+
     state_store = build_state_store(config)
     old_state = state_store.load()
     alerts = select_alerts(
@@ -68,7 +75,7 @@ def check(config: Config, *, dry_run: bool, show_all: bool) -> int:
 
     if dry_run:
         LOG.info("Dry run: %d products would trigger an alert", len(alerts))
-        return 1 if failures else 0
+        return 0
 
     # Send before committing state: a failed email will be retried next run.
     if alerts:
@@ -77,7 +84,7 @@ def check(config: Config, *, dry_run: bool, show_all: bool) -> int:
     else:
         LOG.info("No new stock; no email sent")
     state_store.save(updated_state(old_state, products))
-    return 1 if failures else 0
+    return 0
 
 
 def doctor(config: Config) -> int:
