@@ -10,16 +10,16 @@ Expand reliable portable-air-conditioner coverage for Dutch delivery while keepi
 
 - Repository: `https://github.com/ProgrammerAsahi/airco-tracking-nl`
 - Branch: `main`
-- Last deployed commit: `8efaec7` (`Add five portable airco retailers`)
+- Last deployed commit: `d9ec150` (`Add cross-agent project handoff`; application code is unchanged from `8efaec7`)
 - GitHub workflow: `Deploy to Azure`
 - Azure resource group: `airco-tracker-nl-rg`
 - Azure Container Apps job: `airco-tracker-job`
 - Schedule: every 10 minutes
-- Current deployed image tag: full SHA for commit `8efaec7`
+- Current deployed image tag: `d9ec1507ae1313ed776de0f0913ea8c0e30e408b`
 - State: Azure Blob Storage (`airco-tracker/state.json`)
 - Notifications: Azure Communication Services Email
 - Secrets: Azure Key Vault through Managed Identity
-- Last verified production execution after commit `8efaec7`: succeeded; all five newly added adapters ran without errors and no false stock email was sent.
+- Last verified retailer execution after application commit `8efaec7`: succeeded; all five newly added adapters ran without errors and no false stock email was sent. The documentation-only image for `d9ec150` was subsequently deployed successfully.
 
 ## Supported retailers
 
@@ -79,7 +79,7 @@ Optional/credential-gated:
 
 - Unit tests after the latest retailer expansion: 26 passed.
 - Live local dry-run after commit `8efaec7`: Alternate 0, Trotec 13, Klarstein 18, FlinQ 2, Action Webshop 1; all five reported zero immediate stock at that time.
-- GitHub Actions deployment run for commit `8efaec7`: succeeded.
+- GitHub Actions deployment run `28544655345` for commit `d9ec150`: succeeded.
 - Azure job provisioning state: succeeded; scheduled trigger active.
 
 ## Updating this handoff
