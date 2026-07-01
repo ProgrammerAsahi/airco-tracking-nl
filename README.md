@@ -1,5 +1,11 @@
 # Airco Tracker NL
 
+<p align="center">
+  <a href="./README.md"><img alt="简体中文" src="https://img.shields.io/badge/README-简体中文-d73a49"></a>
+  <a href="./README.en.md"><img alt="English" src="https://img.shields.io/badge/README-English-0969da"></a>
+  <a href="./README.nl.md"><img alt="Nederlands" src="https://img.shields.io/badge/README-Nederlands-f58220"></a>
+</p>
+
 一个轻量的荷兰便携空调库存追踪器，支持本地运行和无密码 Azure 部署。当前监控：
 
 - Coolblue
