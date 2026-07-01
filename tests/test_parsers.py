@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 import unittest
 
@@ -7,9 +8,12 @@ from bs4 import BeautifulSoup
 
 from airco_tracker.adapters.bol import BolAdapter
 from airco_tracker.adapters.coolblue import CoolblueAdapter
+from airco_tracker.adapters.diy import GammaAdapter, KarweiAdapter
 from airco_tracker.adapters.electroworld import ElectroWorldAdapter
 from airco_tracker.adapters.ep import EpAdapter
+from airco_tracker.adapters.lidl import LidlAdapter
 from airco_tracker.adapters.mediamarkt import MediaMarktAdapter
+from airco_tracker.adapters.praxis import PraxisAdapter
 from airco_tracker.adapters.wehkamp import WehkampAdapter
 from airco_tracker.adapters.base import parse_btu, parse_price
 
@@ -64,6 +68,32 @@ class CatalogFetcher:
 
     def get(self, url):
         return self.page
+
+
+class BinaryResponse:
+    def __init__(self, content):
+        self.content = content
+
+    def raise_for_status(self):
+        return None
+
+
+class SitemapSession:
+    def __init__(self, content):
+        self.content = content
+
+    def get(self, url, **kwargs):
+        return BinaryResponse(self.content)
+
+
+class SitemapFetcher:
+    def __init__(self, sitemap, pages):
+        self.timeout = 25
+        self.session = SitemapSession(sitemap)
+        self.pages = pages
+
+    def get(self, url):
+        return self.pages[url]
 
 
 class ParserTests(unittest.TestCase):
@@ -193,6 +223,107 @@ class ParserTests(unittest.TestCase):
             "https://www.wehkamp.nl/huishoudelijke-apparatuur-aircos/",
         )
         self.assertEqual(products, [])
+
+    def test_lidl_uses_sitemap_and_product_json_ld(self) -> None:
+        product_url = "https://www.lidl.nl/p/test-mobiele-airco-9000-btu/p1001"
+        sitemap = gzip.compress(
+            f"""<?xml version="1.0" encoding="UTF-8"?>
+            <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+              <url><loc>{product_url}</loc></url>
+              <url><loc>https://www.lidl.nl/p/test-mobiele-aircooler/p1002</loc></url>
+            </urlset>""".encode()
+        )
+        product_data = {
+            "@type": "Product",
+            "name": "Mobiele airco 9000 BTU",
+            "brand": {"name": "TRONIC"},
+            "offers": [
+                {
+                    "price": 249.99,
+                    "availability": "https://schema.org/InStock",
+                    "url": product_url,
+                }
+            ],
+        }
+        page = f'<script type="application/ld+json">{json.dumps(product_data)}</script>'
+        products = LidlAdapter(SitemapFetcher(sitemap, {product_url: page})).fetch_products()
+        self.assertEqual(len(products), 1)
+        self.assertTrue(products[0].available)
+        self.assertEqual(products[0].price_eur, 249.99)
+        self.assertEqual(products[0].btu, 9000)
+        self.assertEqual(products[0].name, "TRONIC Mobiele airco 9000 BTU")
+
+    def test_gamma_and_karwei_require_online_availability(self) -> None:
+        html = """
+        <article class="js-product-tile" data-state="ONLINE_AVAILABLE">
+          <a class="click-mask" href="/assortiment/one/p/B1"
+             title="Handson mobiele airco 9000 BTU"></a>
+          <meta itemprop="price" content="299.00">
+          <span>9000 BTU</span>
+        </article>
+        <article class="js-product-tile" data-state="HAS_STORE_STOCK">
+          <a class="click-mask" href="/assortiment/two/p/B2"
+             title="Qlima mobiele airconditioner 12000 BTU"></a>
+          <meta itemprop="price" content="499.00">
+        </article>
+        <article class="js-product-tile" data-state="ONLINE_AVAILABLE">
+          <a class="click-mask" href="/assortiment/accessory/p/B3"
+             title="Raamafdichting voor mobiele airco"></a>
+          <meta itemprop="price" content="29.00">
+        </article>"""
+        soup = BeautifulSoup(html, "html.parser")
+        gamma = GammaAdapter(DummyFetcher()).parse(soup, "https://www.gamma.nl/")
+        karwei = KarweiAdapter(DummyFetcher()).parse(soup, "https://www.karwei.nl/")
+        for products in (gamma, karwei):
+            self.assertEqual(len(products), 2)
+            self.assertEqual([product.available for product in products], [True, False])
+            self.assertEqual(products[0].price_eur, 299.0)
+            self.assertEqual(products[0].btu, 9000)
+
+    def test_praxis_requires_current_home_delivery(self) -> None:
+        state = {
+            "translations": {"html": "<b>test</b>"},
+            "products": {
+                "quantity": 3,
+                "collection": [
+                    {
+                        "title": "Sencys Mobiele airco 9000 BTU",
+                        "link": "/mobiele-airco/1",
+                        "regular": {"price": 319},
+                        "deliveryModes": [{"code": "SHDPOSTNLPRAXIS"}],
+                        "availabilityStatus": "Thuisbezorgd",
+                        "availabilityStatusMultiple": ["Online op voorraad"],
+                        "disableStatus": {"isDisabled": False},
+                    },
+                    {
+                        "title": "Sencys Mobiele airco 12000 BTU",
+                        "link": "/mobiele-airco/2",
+                        "regular": {"price": 449},
+                        "deliveryModes": [{"code": "PICKUP"}],
+                        "availabilityStatus": "Bestel & Haal op",
+                        "availabilityStatusMultiple": ["Bezorging niet beschikbaar"],
+                        "disableStatus": {"isDisabled": False},
+                    },
+                    {
+                        "title": "Qlima mini-split airconditioning",
+                        "link": "/split/3",
+                        "regular": {"price": 699},
+                        "deliveryModes": [{"code": "SHDPOSTNLPRAXIS"}],
+                        "availabilityStatus": "Thuisbezorgd",
+                    },
+                ],
+            },
+        }
+        raw = json.dumps(state, separators=(",", ":")).replace("<", r"\x3c")
+        html = f'<script>window["__PRELOADED_STATE_listerFragment__"] = {raw};</script>'
+        products = PraxisAdapter(DummyFetcher()).parse(
+            BeautifulSoup(html, "html.parser"),
+            "https://www.praxis.nl/verwarmingen-airco-s/airco-s/mobiele-airco-s/he057/",
+        )
+        self.assertEqual(len(products), 2)
+        self.assertEqual([product.available for product in products], [True, False])
+        self.assertEqual(products[0].price_eur, 319.0)
+        self.assertEqual(products[0].btu, 9000)
 
     def test_bol_marketing_api_excludes_aircooler_and_reads_offer(self) -> None:
         fetcher = DummyFetcher({

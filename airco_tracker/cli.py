@@ -10,7 +10,11 @@ from .adapters import (
     CoolblueAdapter,
     ElectroWorldAdapter,
     EpAdapter,
+    GammaAdapter,
+    KarweiAdapter,
+    LidlAdapter,
     MediaMarktAdapter,
+    PraxisAdapter,
     WehkampAdapter,
 )
 from .config import Config
@@ -50,6 +54,10 @@ def check(config: Config, *, dry_run: bool, show_all: bool) -> int:
         EpAdapter(fetcher),
         ElectroWorldAdapter(fetcher),
         WehkampAdapter(fetcher),
+        LidlAdapter(fetcher),
+        GammaAdapter(fetcher),
+        KarweiAdapter(fetcher),
+        PraxisAdapter(fetcher),
     ]
     try:
         config.validate_bol()
