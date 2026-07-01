@@ -4,11 +4,11 @@
 
 - Coolblue
 - MediaMarkt NL
-- bol.com（过滤掉 aircooler、风扇、排气管等误匹配）
+- bol.com（通过官方 Marketing Catalog API；需要 Affiliate API 凭据）
 
 它只在商品首次被发现为可购买，或从缺货变为有货时发送邮件；不会每 10 分钟轰炸邮箱。单个零售商失效时，其余站点仍会继续检查。
 
-部分零售商可能阻止 Azure 数据中心 IP（当前 bol.com 会返回 403）。这类单站失败会写入 warning，但不会让整个 Job 重试或影响其他站点；只有所有站点都失败时任务才返回失败。
+bol.com 的网页搜索路径不再抓取：Azure 数据中心 IP 会收到 403，而且 bol 的 robots.txt 明确限制该搜索路径。未配置官方 API 凭据时，bol 适配器会明确保持 disabled，Coolblue 和 MediaMarkt 不受影响。
 
 ## Azure 架构
 
@@ -22,6 +22,18 @@ Container Apps Scheduled Job
 ```
 
 Azure 模式不保存邮箱密码、Storage Key、Communication Services Key 或 ACR 密码。收件地址、BTU 和价格限制不是秘密，作为普通环境配置传入。Key Vault 只为未来无法消除的第三方密钥预留。
+
+### 启用 bol.com 官方 API
+
+bol 的 Marketing Catalog API 提供官方商品搜索、NL 最佳报价、价格和配送描述。先申请 bol Affiliate Program，并在 Affiliate Portal 的 Open API 区域创建 Client ID 和 Client Secret。不要把凭据粘贴到代码、GitHub Variables 或聊天中。
+
+代码部署后，在本机运行：
+
+```bash
+./scripts/configure-bol-api.sh
+```
+
+脚本会隐藏输入 Client Secret，将两项凭据写入 Azure Key Vault，设置不敏感的 GitHub Actions 变量，并触发一次部署。容器运行时再通过 Managed Identity 读取秘密。
 
 ## 本地运行
 

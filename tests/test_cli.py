@@ -13,7 +13,7 @@ from airco_tracker.models import Product
 class _SuccessAdapter:
     site = "Working shop"
 
-    def __init__(self, _fetcher) -> None:
+    def __init__(self, _fetcher, *args, **kwargs) -> None:
         pass
 
     def fetch_products(self):
@@ -23,7 +23,7 @@ class _SuccessAdapter:
 class _FailingAdapter:
     site = "Blocked shop"
 
-    def __init__(self, _fetcher) -> None:
+    def __init__(self, _fetcher, *args, **kwargs) -> None:
         pass
 
     def fetch_products(self):
@@ -36,12 +36,36 @@ class _StateStore:
 
 
 class CliTests(unittest.TestCase):
+    def test_disabled_bol_is_not_instantiated(self) -> None:
+        config = SimpleNamespace(
+            request_timeout_seconds=1,
+            alert_on_first_seen=True,
+            max_price_eur=None,
+            min_btu=None,
+            bol_backend="disabled",
+            validate_bol=lambda: None,
+        )
+        with (
+            patch("airco_tracker.cli.CoolblueAdapter", _SuccessAdapter),
+            patch("airco_tracker.cli.MediaMarktAdapter", _SuccessAdapter),
+            patch("airco_tracker.cli.BolAdapter", side_effect=AssertionError("bol should be disabled")),
+            patch("airco_tracker.cli.build_state_store", return_value=_StateStore()),
+            redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(check(config, dry_run=True, show_all=False), 0)
+
     def test_partial_retailer_failure_is_successful(self) -> None:
         config = SimpleNamespace(
             request_timeout_seconds=1,
             alert_on_first_seen=True,
             max_price_eur=None,
             min_btu=None,
+            bol_backend="marketing_api",
+            bol_client_id="client",
+            bol_client_secret="secret",
+            bol_search_term="mobiele airco",
+            bol_max_pages=1,
+            validate_bol=lambda: None,
         )
         with (
             patch("airco_tracker.cli.CoolblueAdapter", _SuccessAdapter),
@@ -53,7 +77,15 @@ class CliTests(unittest.TestCase):
             self.assertEqual(check(config, dry_run=True, show_all=False), 0)
 
     def test_all_retailer_failures_are_fatal(self) -> None:
-        config = SimpleNamespace(request_timeout_seconds=1)
+        config = SimpleNamespace(
+            request_timeout_seconds=1,
+            bol_backend="marketing_api",
+            bol_client_id="client",
+            bol_client_secret="secret",
+            bol_search_term="mobiele airco",
+            bol_max_pages=1,
+            validate_bol=lambda: None,
+        )
         with (
             patch("airco_tracker.cli.CoolblueAdapter", _FailingAdapter),
             patch("airco_tracker.cli.MediaMarktAdapter", _FailingAdapter),

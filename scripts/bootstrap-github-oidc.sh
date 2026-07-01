@@ -41,6 +41,8 @@ if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
   gh variable set AZURE_SUBSCRIPTION_ID --repo "$GITHUB_REPOSITORY" --body "$AZURE_SUBSCRIPTION_ID"
   gh variable set AZURE_RESOURCE_GROUP --repo "$GITHUB_REPOSITORY" --body "$RESOURCE_GROUP"
   gh variable set EMAIL_TO --repo "$GITHUB_REPOSITORY" --body "$EMAIL_TO"
+  gh variable set BOL_BACKEND --repo "$GITHUB_REPOSITORY" --body "disabled"
+  gh variable set KEY_VAULT_SECRET_MAP --repo "$GITHUB_REPOSITORY" --body ""
   echo "GitHub Actions variables configured for $GITHUB_REPOSITORY."
 else
   echo "GitHub CLI is unavailable or not logged in. Add these repository Actions variables manually:"
@@ -49,6 +51,8 @@ else
   echo "AZURE_SUBSCRIPTION_ID=$AZURE_SUBSCRIPTION_ID"
   echo "AZURE_RESOURCE_GROUP=$RESOURCE_GROUP"
   echo "EMAIL_TO=$EMAIL_TO"
+  echo "BOL_BACKEND=disabled"
+  echo "KEY_VAULT_SECRET_MAP="
 fi
 
 echo "OIDC trust is restricted to $GITHUB_REPOSITORY on branch $GITHUB_BRANCH."

@@ -1,6 +1,7 @@
 name: Deploy to Azure
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -52,6 +53,8 @@ jobs:
         env:
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           EMAIL_TO: ${{ vars.EMAIL_TO }}
+          BOL_BACKEND: ${{ vars.BOL_BACKEND }}
+          KEY_VAULT_SECRET_MAP: ${{ vars.KEY_VAULT_SECRET_MAP }}
           IMAGE_TAG: ${{ github.sha }}
         run: ./scripts/deploy-application.sh
 

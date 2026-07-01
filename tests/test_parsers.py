@@ -10,8 +10,36 @@ from airco_tracker.adapters.mediamarkt import MediaMarktAdapter
 from airco_tracker.adapters.base import parse_btu, parse_price
 
 
+class DummyResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self.payload
+
+
+class DummySession:
+    def __init__(self, search_payload):
+        self.search_payload = search_payload
+        self.token_calls = []
+        self.search_calls = []
+
+    def post(self, url, **kwargs):
+        self.token_calls.append((url, kwargs))
+        return DummyResponse({"access_token": "token"})
+
+    def get(self, url, **kwargs):
+        self.search_calls.append((url, kwargs))
+        return DummyResponse(self.search_payload)
+
+
 class DummyFetcher:
-    pass
+    def __init__(self, search_payload=None):
+        self.timeout = 25
+        self.session = DummySession(search_payload or {})
 
 
 class ParserTests(unittest.TestCase):
@@ -42,16 +70,37 @@ class ParserTests(unittest.TestCase):
         products = MediaMarktAdapter(DummyFetcher()).parse(BeautifulSoup(html, "html.parser"), "https://www.mediamarkt.nl/")
         self.assertEqual([p.available for p in products], [True, False])
 
-    def test_bol_excludes_aircooler(self) -> None:
-        html = """
-        <div><a href="/nl/nl/p/mini-aircooler-mobiele-airco/9300000000001/">Mini Aircooler Mobiele Airco</a>
-        <span>€ 49,95 Op voorraad</span></div>
-        <div><a href="/nl/nl/p/echte-mobiele-airco/9300000000002/">Echte Mobiele Airco 7000 BTU</a>
-        <span>Werkt met afvoerslang naar buiten € 299,00 Op voorraad Morgen in huis</span></div>"""
-        products = BolAdapter(DummyFetcher()).parse(BeautifulSoup(html, "html.parser"), "https://www.bol.com/")
-        self.assertEqual(len(products), 1)
+    def test_bol_marketing_api_excludes_aircooler_and_reads_offer(self) -> None:
+        fetcher = DummyFetcher({
+            "totalPages": 1,
+            "results": [
+                {
+                    "title": "Mini Aircooler Mobiele Airco",
+                    "url": "https://www.bol.com/nl/nl/p/9300000000001/",
+                    "offer": {"price": 49.95, "deliveryDescription": "Op voorraad"},
+                },
+                {
+                    "title": "Echte Mobiele Airco 7000 BTU",
+                    "description": "Werkt met afvoerslang naar buiten",
+                    "url": "https://www.bol.com/nl/nl/p/9300000000002/",
+                    "offer": {"price": 299.0, "deliveryDescription": "Morgen in huis"},
+                },
+                {
+                    "title": "Tweede Mobiele Airco 9000 BTU",
+                    "bolProductId": 9300000000003,
+                },
+            ],
+        })
+        products = BolAdapter(fetcher, "client", "secret").fetch_products()
+        self.assertEqual(len(products), 2)
         self.assertTrue(products[0].available)
         self.assertEqual(products[0].btu, 7000)
+        self.assertEqual(products[0].price_eur, 299.0)
+        self.assertEqual(products[0].delivery, "Morgen in huis")
+        self.assertFalse(products[1].available)
+        self.assertEqual(products[1].url, "https://www.bol.com/nl/nl/p/9300000000003/")
+        self.assertEqual(fetcher.session.token_calls[0][1]["auth"], ("client", "secret"))
+        self.assertEqual(fetcher.session.search_calls[0][1]["params"]["country-code"], "NL")
 
 
 if __name__ == "__main__":

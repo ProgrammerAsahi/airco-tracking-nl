@@ -15,6 +15,12 @@ param emailTo string
 param cronExpression string = '*/10 * * * *'
 param minBtu string = '5000'
 param maxPriceEur string = ''
+@allowed([
+  'disabled'
+  'marketing_api'
+])
+param bolBackend string = 'disabled'
+param keyVaultEnvMap string = ''
 
 resource containerEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
   name: containerEnvironmentName
@@ -82,6 +88,10 @@ resource job 'Microsoft.App/jobs@2025-01-01' = {
             { name: 'MAX_PRICE_EUR', value: maxPriceEur }
             { name: 'ALERT_ON_FIRST_SEEN', value: 'true' }
             { name: 'REQUEST_TIMEOUT_SECONDS', value: '25' }
+            { name: 'BOL_BACKEND', value: bolBackend }
+            { name: 'BOL_SEARCH_TERM', value: 'mobiele airco' }
+            { name: 'BOL_MAX_PAGES', value: '5' }
+            { name: 'KEY_VAULT_SECRET_MAP', value: keyVaultEnvMap }
           ]
           resources: {
             cpu: any('0.25')

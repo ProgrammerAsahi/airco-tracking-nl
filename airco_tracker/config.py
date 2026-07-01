@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,6 +9,7 @@ from pathlib import Path
 # The installed package lives inside .venv/site-packages. Runtime data belongs
 # to the project working directory (the LaunchAgent sets it explicitly).
 ROOT = Path(os.getenv("AIRCO_TRACKER_HOME", os.getcwd())).expanduser().resolve()
+LOG = logging.getLogger(__name__)
 
 
 def load_dotenv(path: Path = ROOT / ".env") -> None:
@@ -64,6 +66,11 @@ class Config:
     azure_storage_blob: str
     acs_endpoint: str
     azure_key_vault_url: str
+    bol_backend: str
+    bol_client_id: str
+    bol_client_secret: str
+    bol_search_term: str
+    bol_max_pages: int
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -90,6 +97,11 @@ class Config:
             azure_storage_blob=os.getenv("AZURE_STORAGE_BLOB", "state.json").strip(),
             acs_endpoint=os.getenv("ACS_ENDPOINT", "").strip(),
             azure_key_vault_url=os.getenv("AZURE_KEY_VAULT_URL", "").strip(),
+            bol_backend=os.getenv("BOL_BACKEND", "disabled").strip().lower(),
+            bol_client_id=os.getenv("BOL_CLIENT_ID", "").strip(),
+            bol_client_secret=os.getenv("BOL_CLIENT_SECRET", ""),
+            bol_search_term=os.getenv("BOL_SEARCH_TERM", "mobiele airco").strip(),
+            bol_max_pages=max(1, int(os.getenv("BOL_MAX_PAGES", "5"))),
         )
 
     def validate_email(self) -> None:
@@ -132,6 +144,22 @@ class Config:
         if not self.azure_storage_account_url:
             raise ValueError("AZURE_STORAGE_ACCOUNT_URL is required for azure_blob state")
 
+    def validate_bol(self) -> None:
+        if self.bol_backend == "disabled":
+            return
+        if self.bol_backend != "marketing_api":
+            raise ValueError("BOL_BACKEND must be disabled or marketing_api")
+        missing = [
+            name
+            for name, value in {
+                "BOL_CLIENT_ID": self.bol_client_id,
+                "BOL_CLIENT_SECRET": self.bol_client_secret,
+            }.items()
+            if not value
+        ]
+        if missing:
+            raise ValueError("Missing bol.com Marketing Catalog API configuration: " + ", ".join(missing))
+
 
 def _load_key_vault_secrets() -> None:
     """Optionally hydrate named environment variables from Key Vault.
@@ -155,4 +183,7 @@ def _load_key_vault_secrets() -> None:
             raise ValueError("KEY_VAULT_SECRET_MAP must contain ENV_NAME=secret-name pairs")
         env_name, secret_name = (part.strip() for part in item.split("=", 1))
         if env_name and secret_name and not os.getenv(env_name):
-            os.environ[env_name] = client.get_secret(secret_name).value
+            try:
+                os.environ[env_name] = client.get_secret(secret_name).value
+            except Exception as exc:
+                LOG.warning("Cannot load Key Vault secret %s: %s", secret_name, exc)

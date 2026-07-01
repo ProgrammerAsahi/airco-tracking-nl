@@ -37,7 +37,24 @@ def _configure_logging() -> None:
 
 def check(config: Config, *, dry_run: bool, show_all: bool) -> int:
     fetcher = Fetcher(config.request_timeout_seconds)
-    adapters = [CoolblueAdapter(fetcher), MediaMarktAdapter(fetcher), BolAdapter(fetcher)]
+    adapters = [CoolblueAdapter(fetcher), MediaMarktAdapter(fetcher)]
+    try:
+        config.validate_bol()
+    except ValueError as exc:
+        LOG.warning("bol.com: disabled because its API configuration is incomplete: %s", exc)
+    else:
+        if config.bol_backend == "marketing_api":
+            adapters.append(
+                BolAdapter(
+                    fetcher,
+                    config.bol_client_id,
+                    config.bol_client_secret,
+                    search_term=config.bol_search_term,
+                    max_pages=config.bol_max_pages,
+                )
+            )
+        else:
+            LOG.info("bol.com: disabled until official Marketing Catalog API credentials are configured")
     products: list[Product] = []
     failures: list[str] = []
     for adapter in adapters:
@@ -91,6 +108,7 @@ def doctor(config: Config) -> int:
     store = build_state_store(config)
     state = store.load()
     config.validate_email()
+    config.validate_bol()
     summary = {
         "app_env": config.app_env,
         "email_backend": config.email_backend,
@@ -101,6 +119,8 @@ def doctor(config: Config) -> int:
         "azure_storage_account_url": config.azure_storage_account_url or None,
         "acs_endpoint": config.acs_endpoint or None,
         "key_vault_enabled": bool(config.azure_key_vault_url),
+        "bol_backend": config.bol_backend,
+        "bol_credentials_configured": bool(config.bol_client_id and config.bol_client_secret),
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
@@ -109,8 +129,8 @@ def doctor(config: Config) -> int:
 def main(argv: list[str] | None = None) -> int:
     _configure_logging()
     args = _parser().parse_args(argv)
-    config = Config.from_env()
     try:
+        config = Config.from_env()
         if args.command == "send-test":
             send_message(config, build_message(config, [], test=True))
             print(f"Test email sent to {config.email_to}")
